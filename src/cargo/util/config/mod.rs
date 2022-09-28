@@ -2466,20 +2466,17 @@ macro_rules! drop_eprint {
     );
 }
 
-fn remap_target_dir(remap: &str, path: PathBuf) -> CargoResult<PathBuf> {
+fn remap_target_dir(remap: &str, mut path: PathBuf) -> CargoResult<PathBuf> {
     let (from, to) = remap.split_once('=')
         .ok_or_else(|| anyhow!("must be a value of the form FROM=TO"))?;
 
-    let path = path.into_os_string().into_string().unwrap();
-
-    if !path.starts_with(from) {
-        // Unchanged
-        return Ok(PathBuf::from(path));
+    // Change the path only if it starts with the `from` prefix
+    if path.starts_with(from) {
+        let relative = path.strip_prefix(from)?;
+        path = PathBuf::from(to).join(relative);
     }
 
-    let new_path = path.replace(from, to);
-    let new_path = PathBuf::from(new_path);
-    Ok(new_path)
+    Ok(path)
 }
 
 #[cfg(test)]
