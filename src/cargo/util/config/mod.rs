@@ -506,12 +506,6 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(self.cwd.join(dir))))
-        } else if let Some(remap) = self.env.get("CARGO_TARGET_DIR_REMAP") {
-            remap_target_dir(remap, self.cwd.clone())
-                .map(|dir| Some(Filesystem::new(dir)))
-                .map_err(|err| anyhow!(
-                    "the target directory remap is not valid in the \
-                    `CARGO_TARGET_DIR_REMAP` environment variable. reason: {}", err))
         } else if let Some(val) = &self.build_config()?.target_dir {
             let path = val.resolve_path(self);
 
@@ -524,6 +518,13 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(path)))
+        } else if let Some(remap) = self.env.get("CARGO_TARGET_DIR_REMAP") {
+            remap_target_dir(remap, self.cwd.clone())
+                .map(|dir| Some(Filesystem::new(dir)))
+                .map_err(|err| anyhow!(
+                    "the target directory remap is not valid in the \
+                    `CARGO_TARGET_DIR_REMAP` environment variable. reason: {}", err)
+                )
         } else {
             Ok(None)
         }
