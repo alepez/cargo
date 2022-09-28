@@ -518,8 +518,8 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(path)))
-        } else if let Some(remap) = get_target_dir_remap(self) {
-            remap_target_dir(remap, self.cwd.clone())
+        } else if let Some(remap_rules) = self.get_target_dir_remap_rules() {
+            remap_target_dir_list(&remap_rules, self.cwd.clone())
                 .map(|dir| Some(Filesystem::new(dir)))
                 .map_err(|err| {
                     anyhow!(
@@ -530,6 +530,27 @@ impl Config {
                 })
         } else {
             Ok(None)
+        }
+    }
+
+    fn get_target_dir_remap_rules(&self) -> Option<StringList> {
+        let mut rules: Vec<String> = Vec::new();
+
+        if let Some(env_rules) = self.env.get("CARGO_TARGET_DIR_REMAP") {
+            let env_rules = env_rules.split(':').map(String::from);
+            rules.extend(env_rules);
+        }
+
+        if let Ok(build_config) = self.build_config() {
+            if let Some(config_rules) = build_config.target_dir_remap.as_ref() {
+                rules.extend(config_rules.0.clone());
+            }
+        }
+
+        if rules.is_empty() {
+            None
+        } else {
+            Some(StringList(rules))
         }
     }
 
@@ -2203,7 +2224,7 @@ pub struct CargoBuildConfig {
     pub pipelining: Option<bool>,
     pub dep_info_basedir: Option<ConfigRelativePath>,
     pub target_dir: Option<ConfigRelativePath>,
-    pub target_dir_remap: Option<String>,
+    pub target_dir_remap: Option<StringList>,
     pub incremental: Option<bool>,
     pub target: Option<BuildTargetConfig>,
     pub jobs: Option<i32>,
@@ -2485,11 +2506,12 @@ fn remap_target_dir(remap: &str, mut path: PathBuf) -> CargoResult<PathBuf> {
     Ok(path)
 }
 
-fn get_target_dir_remap(config: &Config) -> Option<&String> {
-    config
-        .env
-        .get("CARGO_TARGET_DIR_REMAP")
-        .or_else(|| config.build_config().ok()?.target_dir_remap.as_ref())
+fn remap_target_dir_list(remap: &StringList, mut path: PathBuf) -> CargoResult<PathBuf> {
+    for item in remap.0.iter() {
+        path = remap_target_dir(&item, path)?;
+    }
+
+    Ok(path)
 }
 
 #[cfg(test)]
