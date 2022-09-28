@@ -521,10 +521,13 @@ impl Config {
         } else if let Some(remap) = get_target_dir_remap(self) {
             remap_target_dir(remap, self.cwd.clone())
                 .map(|dir| Some(Filesystem::new(dir)))
-                .map_err(|err| anyhow!(
-                    "the target directory remap is not valid in the \
-                    `CARGO_TARGET_DIR_REMAP` environment variable. reason: {}", err)
-                )
+                .map_err(|err| {
+                    anyhow!(
+                        "the target directory remap is not valid in the \
+                    `CARGO_TARGET_DIR_REMAP` environment variable. reason: {}",
+                        err
+                    )
+                })
         } else {
             Ok(None)
         }
@@ -2469,7 +2472,8 @@ macro_rules! drop_eprint {
 }
 
 fn remap_target_dir(remap: &str, mut path: PathBuf) -> CargoResult<PathBuf> {
-    let (from, to) = remap.split_once('=')
+    let (from, to) = remap
+        .split_once('=')
         .ok_or_else(|| anyhow!("must be a value of the form FROM=TO"))?;
 
     // Change the path only if it starts with the `from` prefix
