@@ -518,7 +518,11 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(path)))
-        } else if let Some(remap) = self.env.get("CARGO_TARGET_DIR_REMAP") {
+        } else if let Some(remap) = self
+            .env
+            .get("CARGO_TARGET_DIR_REMAP")
+            .or_else(|| self.build_config().ok()?.target_dir_remap.as_ref())
+        {
             remap_target_dir(remap, self.cwd.clone())
                 .map(|dir| Some(Filesystem::new(dir)))
                 .map_err(|err| anyhow!(
@@ -2200,6 +2204,7 @@ pub struct CargoBuildConfig {
     pub pipelining: Option<bool>,
     pub dep_info_basedir: Option<ConfigRelativePath>,
     pub target_dir: Option<ConfigRelativePath>,
+    pub target_dir_remap: Option<String>,
     pub incremental: Option<bool>,
     pub target: Option<BuildTargetConfig>,
     pub jobs: Option<i32>,
