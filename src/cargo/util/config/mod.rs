@@ -506,6 +506,16 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(self.cwd.join(dir))))
+        } else if let Some(remap) = self.env.get("CARGO_TARGET_DIR_REMAP") {
+            let dir = remap_target_dir(remap, self.cwd.clone());
+            if let Ok(dir) = dir {
+                Ok(Some(Filesystem::new(dir)))
+            } else {
+                bail!(
+                    "the target directory remap is not valid in the \
+                    `CARGO_TARGET_DIR_REMAP` environment variable"
+                )
+            }
         } else if let Some(val) = &self.build_config()?.target_dir {
             let path = val.resolve_path(self);
 
@@ -2458,4 +2468,39 @@ macro_rules! drop_eprint {
     ($config:expr, $($arg:tt)*) => (
         $crate::__shell_print!($config, err, false, $($arg)*)
     );
+}
+
+fn remap_target_dir(remap: &str, path: PathBuf) -> Result<PathBuf, ()> {
+    let path = path.into_os_string().into_string().unwrap();
+    let (from, to) = remap.split_once('=').ok_or(())?;
+
+    // Remap is valid only if original path starts with `from`
+    if !path.starts_with(from) {
+        return Err(());
+    }
+
+    let new_path = path.replace(from, to);
+    let new_path = PathBuf::from(new_path);
+    Ok(new_path)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_remap_target_dir_start() {
+        let original_path = PathBuf::from("/foo/bar");
+        let remap = String::from("/foo/bar=/new/target/prefix");
+        let remapped = remap_target_dir(&remap, original_path);
+        assert_eq!(Ok(PathBuf::from("/new/target/prefix")), remapped);
+    }
+
+    #[test]
+    fn test_remap_target_dir_middle() {
+        let original_path = PathBuf::from("/baz/foo/bar");
+        let remap = String::from("/foo/bar=/new/target/prefix");
+        let remapped = remap_target_dir(&remap, original_path);
+        assert_eq!(Err(()), remapped);
+    }
 }
