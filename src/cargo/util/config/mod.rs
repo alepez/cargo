@@ -518,11 +518,7 @@ impl Config {
             }
 
             Ok(Some(Filesystem::new(path)))
-        } else if let Some(remap) = self
-            .env
-            .get("CARGO_TARGET_DIR_REMAP")
-            .or_else(|| self.build_config().ok()?.target_dir_remap.as_ref())
-        {
+        } else if let Some(remap) = get_target_dir_remap(self) {
             remap_target_dir(remap, self.cwd.clone())
                 .map(|dir| Some(Filesystem::new(dir)))
                 .map_err(|err| anyhow!(
@@ -2483,6 +2479,13 @@ fn remap_target_dir(remap: &str, mut path: PathBuf) -> CargoResult<PathBuf> {
     }
 
     Ok(path)
+}
+
+fn get_target_dir_remap(config: &Config) -> Option<&String> {
+    config
+        .env
+        .get("CARGO_TARGET_DIR_REMAP")
+        .or_else(|| config.build_config().ok()?.target_dir_remap.as_ref())
 }
 
 #[cfg(test)]
