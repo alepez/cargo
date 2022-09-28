@@ -507,15 +507,11 @@ impl Config {
 
             Ok(Some(Filesystem::new(self.cwd.join(dir))))
         } else if let Some(remap) = self.env.get("CARGO_TARGET_DIR_REMAP") {
-            let dir = remap_target_dir(remap, self.cwd.clone());
-            if let Ok(dir) = dir {
-                Ok(Some(Filesystem::new(dir)))
-            } else {
-                bail!(
+            remap_target_dir(remap, self.cwd.clone())
+                .map(|dir| Some(Filesystem::new(dir)))
+                .map_err(|err| anyhow!(
                     "the target directory remap is not valid in the \
-                    `CARGO_TARGET_DIR_REMAP` environment variable"
-                )
-            }
+                    `CARGO_TARGET_DIR_REMAP` environment variable. reason: {}", err))
         } else if let Some(val) = &self.build_config()?.target_dir {
             let path = val.resolve_path(self);
 
@@ -2470,13 +2466,15 @@ macro_rules! drop_eprint {
     );
 }
 
-fn remap_target_dir(remap: &str, path: PathBuf) -> Result<PathBuf, ()> {
-    let path = path.into_os_string().into_string().unwrap();
-    let (from, to) = remap.split_once('=').ok_or(())?;
+fn remap_target_dir(remap: &str, path: PathBuf) -> CargoResult<PathBuf> {
+    let (from, to) = remap.split_once('=')
+        .ok_or_else(|| anyhow!("must be a value of the form FROM=TO"))?;
 
-    // Remap is valid only if original path starts with `from`
+    let path = path.into_os_string().into_string().unwrap();
+
     if !path.starts_with(from) {
-        return Err(());
+        // Unchanged
+        return Ok(PathBuf::from(path));
     }
 
     let new_path = path.replace(from, to);
@@ -2490,17 +2488,25 @@ mod tests {
 
     #[test]
     fn test_remap_target_dir_start() {
-        let original_path = PathBuf::from("/foo/bar");
+        let original_path = PathBuf::from("/foo/bar/baz");
         let remap = String::from("/foo/bar=/new/target/prefix");
         let remapped = remap_target_dir(&remap, original_path);
-        assert_eq!(Ok(PathBuf::from("/new/target/prefix")), remapped);
+        assert_eq!(PathBuf::from("/new/target/prefix/baz"), remapped.unwrap());
     }
 
     #[test]
-    fn test_remap_target_dir_middle() {
-        let original_path = PathBuf::from("/baz/foo/bar");
+    fn test_remap_target_dir_different_start_unchanged() {
+        let original_path = PathBuf::from("/baz/foo/bar/baz");
         let remap = String::from("/foo/bar=/new/target/prefix");
         let remapped = remap_target_dir(&remap, original_path);
-        assert_eq!(Err(()), remapped);
+        assert_eq!(PathBuf::from("/baz/foo/bar/baz"), remapped.unwrap());
+    }
+
+    #[test]
+    fn test_remap_target_dir_invalid_syntax() {
+        let original_path = PathBuf::from("/baz/foo/bar/baz");
+        let remap = String::from("/new/target/prefix");
+        let remapped = remap_target_dir(&remap, original_path);
+        assert!(remapped.is_err());
     }
 }
